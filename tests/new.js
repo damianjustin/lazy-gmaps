@@ -15,7 +15,7 @@ const MOCK = fs.readFileSync(__dirname + "/suite.js", "utf8").match(/const MOCK_
 let failed = 0, total = 0;
 async function run(browser, name, opts, steps) {
   if (ONLY && !name.includes(ONLY)) return;
-  const ctx = await browser.newContext({ userAgent: HUMAN, viewport: { width: 1280, height: 800 }, colorScheme: opts.colorScheme || "light", javaScriptEnabled: opts.noJs ? false : true });
+  const ctx = await browser.newContext({ userAgent: opts.ua || HUMAN, viewport: { width: 1280, height: 800 }, colorScheme: opts.colorScheme || "light", javaScriptEnabled: opts.noJs ? false : true });
   await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
   const n = { script: 0, staticReq: [], embedReq: [] }, logs = [];
   const files = Object.assign({ "/lazy-gmaps.js": WRAPPER }, opts.files || {});
@@ -39,7 +39,10 @@ async function run(browser, name, opts, steps) {
   p.on("pageerror", (e) => logs.push("pageerror: " + e.message));
   await p.goto("https://site.test/page.html");
   await p.waitForTimeout(opts.wait || 500);
-  const snap = () => p.evaluate(() => ({
+  // Then wait for loads in progress to finish (embeds can be slow on a busy machine), unless the
+  // test acts while a map is still loading.
+  if (!opts.midLoad) await p.waitForFunction(() => !document.querySelector('[data-gmap-state="loading"]'), null, { timeout: 3000 }).catch(() => {});
+  const snap =() => p.evaluate(() => ({
     maps: window.__maps || [], markers: window.__markers || [], info: window.__info || [], calls: window.calls || [],
     states: [...document.querySelectorAll("[data-gmap]")].map((e) => (e.id || "?") + "=" + e.getAttribute("data-gmap-state")),
   }));
@@ -238,7 +241,7 @@ const DYN = (id, extra = "") => `<div id="${id}" class="map" data-gmap data-gmap
       check("no map", (await snap()).maps.length === 0);
     });
 
-  await run(b, "modal: destroyed (element kept on the page) while the API is loading → no map is built", { scriptDelay: 500,
+  await run(b, "modal: destroyed (element kept on the page) while the API is loading → no map is built", { scriptDelay: 500, midLoad: true,
     html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script>`, DYN("d1")), wait: 200 },
     async (p, snap, check) => {
       await p.evaluate(() => LazyGMaps.destroy(document.getElementById("d1"))); await p.waitForTimeout(800);
@@ -412,6 +415,117 @@ const DYN = (id, extra = "") => `<div id="${id}" class="map" data-gmap data-gmap
     async (p, snap, check, n) => {
       const rp = await p.evaluate(() => { const i = document.querySelector("#c1 .lgm-preview img"); return i && i.referrerPolicy; });
       check("referrerPolicy set", rp === "no-referrer-when-downgrade" && n.staticReq.length === 1, { rp, n });
+    });
+
+  // ===================== second review (ChatGPT) =====================
+  const CFG = `<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script>`;
+  const BOT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+  await run(b, "review2: container removed while loading, re-added and scanned → exactly one map", { scriptDelay: 1500, midLoad: true,
+    html: doc(CFG, `<div id="host">${DYN("d1")}</div>`) },
+    async (p, snap, check) => {
+      const before = await p.evaluate(() => document.getElementById("d1").getAttribute("data-gmap-state"));
+      await p.evaluate(() => { window.__d1 = document.getElementById("d1"); __d1.remove(); });
+      await p.waitForTimeout(1800);                      // the load finishes while detached
+      await p.evaluate(() => { document.getElementById("host").appendChild(__d1); LazyGMaps.scan(document.getElementById("host")); LazyGMaps.scan(document); LazyGMaps.load(__d1); });
+      await p.waitForTimeout(800);
+      const s = await snap();
+      check("was loading, then one map, ready", before === "loading" && s.maps.length === 1 && s.states.join() === "d1=ready", { before, s });
+    });
+  await run(b, "review2: container removed and re-added while loading → exactly one map", { scriptDelay: 1000, midLoad: true,
+    html: doc(CFG, `<div id="host">${DYN("d1")}</div>`) },
+    async (p, snap, check) => {
+      await p.evaluate(() => { const d = document.getElementById("d1"); d.remove(); document.getElementById("host").appendChild(d); LazyGMaps.scan(document); LazyGMaps.load(d); });
+      await p.waitForTimeout(1500);
+      const s = await snap();
+      check("one map, ready", s.maps.length === 1 && s.states.join() === "d1=ready", s);
+    });
+  await run(b, "review2: load() from site code does not bill a bot; the Show map click does", { ua: BOT,
+    html: doc(CFG, `<div id="host"></div>`) },
+    async (p, snap, check, n) => {
+      await p.evaluate(() => {
+        const el = document.createElement("div"); el.id = "m1"; el.className = "map";
+        el.setAttribute("data-gmap", ""); el.setAttribute("data-gmap-mode", "dynamic"); el.setAttribute("data-gmap-lat", "1"); el.setAttribute("data-gmap-lng", "2");
+        document.getElementById("host").appendChild(el);
+        LazyGMaps.load(el); LazyGMaps.load(el, { zoom: 3 }); LazyGMaps.load(el, undefined, true);
+      });
+      await p.waitForTimeout(400);
+      let s = await snap();
+      check("skipped, nothing requested", s.states.join() === "m1=skipped" && n.script === 0 && s.maps.length === 0, { s, n });
+      await p.click("#m1 [data-gmap-load]"); await p.waitForTimeout(500);
+      s = await snap();
+      check("click loads it", s.states.join() === "m1=ready" && n.script === 1 && s.maps.length === 1, { s, n });
+    });
+  await run(b, "review2: ready() resolves null for a map in error, and when a loading map fails", { scriptDelay: 800, midLoad: true,
+    html: doc(CFG, DYN("d1") + `<div id="bad" class="map" data-gmap data-gmap-mode="dynamic"></div>`) },
+    async (p, snap, check) => {
+      const r = await p.evaluate(async () => {
+        const bad = await LazyGMaps.ready(document.getElementById("bad"));
+        const d1 = document.getElementById("d1"), state = d1.getAttribute("data-gmap-state");
+        const pending = LazyGMaps.ready(d1);
+        if (state !== "loading") return { notLoading: state };
+        window.gm_authFailure();                              // installed when the API load started
+        const timeout = new Promise((res) => setTimeout(() => res("still pending"), 1500));
+        return { bad, d1: await Promise.race([pending, timeout]) };
+      });
+      check("both null", r.bad === null && r.d1 === null, r);
+    });
+  await run(b, "review2: after auth failure get() is null, the marker is detached and load() builds nothing", {
+    html: doc(CFG, DYN("d1", `data-gmap-popup="Hi"`)) },
+    async (p, snap, check, n, logs) => {
+      const r = await p.evaluate(() => {
+        const el = document.getElementById("d1"), before = LazyGMaps.get(el), marker = before && before.marker;
+        window.gm_authFailure(); window.gm_authFailure();
+        LazyGMaps.load(el);
+        return { had: !!(before && before.map), after: LazyGMaps.get(el), removed: !!(marker && marker.removed) };
+      });
+      await p.waitForTimeout(300);
+      const s = await snap();
+      const authLogs = logs.filter((l) => l.includes("Google rejected the API key")).length;
+      check("get() null, marker detached, one map, error, logged once", r.had && r.after === null && r.removed && s.maps.length === 1 && s.states.join() === "d1=error" && authLogs === 1, { r, s, authLogs });
+    });
+  await run(b, "review2: update() with invalid values changes nothing and logs an error", {
+    html: doc(CFG, DYN("d1")) },
+    async (p, snap, check, n, logs) => {
+      const r = await p.evaluate(() => {
+        const el = document.getElementById("d1");
+        LazyGMaps.update(el, { lat: "not-a-number", zoom: 12 });
+        LazyGMaps.update(el, { lat: 95 });
+        LazyGMaps.update(el, { zoom: 40 });
+        LazyGMaps.update(el, { lng: "" });
+        const o = LazyGMaps.options(el);
+        const kept = { lat: o.lat, lng: o.lng, zoom: o.zoom, attr: el.getAttribute("data-gmap-lat"), setCenter: window.__setCenter };
+        LazyGMaps.update(el, { lat: -32, zoom: 9 });
+        return { kept, after: { lat: LazyGMaps.options(el).lat, zoom: window.__setZoom } };
+      });
+      check("bad updates ignored, good update applied", r.kept.lat === -31.95 && r.kept.lng === 115.86 && r.kept.zoom === 15 && r.kept.attr === "-31.95" && r.kept.setCenter === undefined &&
+        r.after.lat === -32 && r.after.zoom === 9 && logs.filter((l) => l.includes("update() ignored")).length === 4, { r, logs });
+    });
+  await run(b, "review2: a Maps script added by another plugin after ours blocks later dynamic maps", {
+    html: doc(CFG, DYN("d1") + `<div id="host"></div>`) },
+    async (p, snap, check, n) => {
+      await p.evaluate(() => {
+        const t = document.createElement("script"); t.type = "text/plain"; t.src = "https://maps.googleapis.com/maps/api/js?key=OTHER&callback=initMap"; document.head.appendChild(t);
+        const el = document.createElement("div"); el.id = "d2"; el.className = "map";
+        el.setAttribute("data-gmap", ""); el.setAttribute("data-gmap-mode", "dynamic"); el.setAttribute("data-gmap-lat", "1"); el.setAttribute("data-gmap-lng", "2");
+        el.addEventListener("gmap:error", (e) => { window.__reason = e.detail.reason; });
+        document.getElementById("host").appendChild(el); LazyGMaps.load(el);
+      });
+      await p.waitForTimeout(300);
+      const s = await snap();
+      check("d1 kept, d2 blocked, one map", s.states.join() === "d1=ready,d2=error" && (await p.evaluate(() => window.__reason)) === "blocked" && s.maps.length === 1, s);
+    });
+  await run(b, "review2: an exception in the embed's load handling is logged, not thrown", {
+    html: doc(CFG + `<script>const sa = Element.prototype.setAttribute; Element.prototype.setAttribute = function (k, v) { if (this.id === "e1" && k === "data-gmap-state" && v === "ready") throw new Error("site patch"); return sa.call(this, k, v); };</script>`, EMBED) },
+    async (p, snap, check, n, logs) => {
+      check("no page error, logged", !logs.some((l) => l.startsWith("pageerror")) && logs.some((l) => l.includes("the embed could not be shown")), logs);
+    });
+  await run(b, "review2: scan() and load() with settings, both before start, each keep their settings", {
+    files: { "/site.js": "LazyGMaps.scan(document.getElementById('d1'), { zoom: 7 }); LazyGMaps.load(document.getElementById('d2'), { zoom: 8 });" },
+    html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script><script src="/site.js" defer></script>`, DYN("d1") + DYN("d2")) },
+    async (p, snap, check) => {
+      const s = await snap();
+      const z = Object.fromEntries(s.maps.map((m) => [m.id, m.zoom]));
+      check("d1 zoom 7, d2 zoom 8, two maps", s.maps.length === 2 && z.d1 === 7 && z.d2 === 8 && s.states.join() === "d1=ready,d2=ready", s);
     });
 
   await b.close();

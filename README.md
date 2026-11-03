@@ -150,7 +150,7 @@ window.lazyGMapsConfig = {
 
 A map uses the `default` set, or the set named by `data-gmap-style="muted"`. When the visitor's browser is in dark mode, the matching `/dark` set is used if there is one. The browser setting is read when the map is set up.
 
-Dynamic maps without styles or a Map ID use Google's own dark mode in dark browsers (`colorScheme: FOLLOW_SYSTEM`). Set `colorScheme` in `mapOptions` or `data-gmap-options` to choose otherwise, or `darkMode: false` to use light styles everywhere.
+Dynamic maps without styles or a Map ID use Google's own dark mode in dark browsers (`colorScheme: FOLLOW_SYSTEM`). Set `colorScheme` in `mapOptions` or `data-gmap-options` to choose otherwise, or `darkMode: false` to turn off automatic dark mode. A `colorScheme` you set still applies.
 
 `styles` given in `data-gmap-options` replace the configured sets for that map. Maps with a Map ID are styled in the Google Cloud console instead.
 
@@ -264,9 +264,9 @@ All configuration must be in place before lazy-gmaps.js: in inline scripts or sc
 | Method | Description |
 | --- | --- |
 | `LazyGMaps.scan(root?, settings?)` | Sets up containers inside `root` (or `root` itself) that are not yet set up. `settings` apply to those maps only. |
-| `LazyGMaps.load(el, settings?)` | Loads a map immediately, ignoring the viewport, click and bot checks. `settings` apply to this map only. |
-| `LazyGMaps.ready(el)` | Promise resolving with `{ map, marker, infoWindow }` (or `{ iframe }`) once the map is shown, or with `null` if it is destroyed first. It stays pending while the map is waiting, skipped or in error. |
-| `LazyGMaps.update(el, { lat, lng, zoom, query })` | Moves a map and its marker without rebuilding it. |
+| `LazyGMaps.load(el, settings?)` | Loads a map immediately, ignoring the viewport and click checks. `settings` apply to this map only. For a visitor identified as a bot, a dynamic map stays `skipped` until the visitor clicks its "Show map" button. |
+| `LazyGMaps.ready(el)` | Promise resolving with `{ map, marker, infoWindow }` (or `{ iframe }`) once the map is shown, or with `null` if it fails or is destroyed first. It waits while the map is waiting, in preview or skipped. |
+| `LazyGMaps.update(el, { lat, lng, zoom, query })` | Moves a map and its marker without rebuilding it. Invalid values are ignored and logged. |
 | `LazyGMaps.destroy(el)` | Removes a map, its click handling and its state, cancelling any load in progress. The container can then be set up again with `scan()` or `load()`. |
 | `LazyGMaps.get(el)` | `{ map, marker, infoWindow }`, `{ iframe }` or `null`. |
 | `LazyGMaps.options(el)` | The map's resolved options, or `null`. |
@@ -286,7 +286,7 @@ Each container has a `data-gmap-state` attribute and dispatches a matching `gmap
 | `waiting` | Waiting for the viewport or a click. |
 | `preview` | Showing a static image (dynamic map with click trigger). |
 | `loading` | Loading. |
-| `ready` | Shown. `event.detail` is `{ map, marker, infoWindow }` or `{ iframe }`. |
+| `ready` | Shown. `event.detail` is `{ map, marker, infoWindow }` or `{ iframe }`. For embeds, this means Google's iframe has loaded; the page cannot see inside it, so a key error in an embed shows Google's message in the map. |
 | `skipped` | Not loaded because the visitor was identified as a bot. The "Show map" button still loads it. |
 | `error` | The map could not be shown; the container shows its fallback link. `event.detail.reason` is `invalid`, `blocked`, `auth` or `load` (see [Errors](#errors)). |
 
@@ -367,7 +367,7 @@ Dynamic maps and their static previews are not loaded when the visitor:
 2. has a user agent containing a term used by crawlers and tools: `bot`, `agent`, `crawl`, `spider`, `slurp`, `external`, `whatsapp`, `preview`, `headless`, `phantom`, `selenium`, `puppeteer`, `playwright`, `curl`, `wget`, `python`, `java`, `go-http`, `okhttp`, `axios`, `node-fetch`, `libwww`, `http`, `lighthouse`, `pagespeed`, `inspect`, `monitor`, `uptime`, `scan`, and several named AI and Google fetchers; or
 3. reports a Chrome version below 100.
 
-Embed maps are always loaded, because the Maps Embed API has no usage charge.
+Embed maps are always loaded, because the Maps Embed API has no usage charge. `LazyGMaps.load()` follows the same check for dynamic maps; only the visitor clicking "Show map" loads one.
 
 The check identifies clients that declare themselves; it cannot identify automation that imitates a current browser. Visitors identified in error can load the map with the "Show map" button. Replace the check with the `isBot` setting.
 ## Security

@@ -292,6 +292,10 @@
     var chrome = ua.match(/(?:chrome|chromium|crios)\/(\d+)/i);
     return !!chrome && +chrome[1] < 100;                    // Chrome updates automatically
   }
+  function isBotVisitor() {                                 // checked once per page
+    if (botResult === null) botResult = isLikelyBot();
+    return botResult;
+  }
 
   // ---- default stylesheet --------------------------------------------------------------------
   // Container rules have zero specificity so site CSS always wins. The preview button uses
@@ -368,10 +372,31 @@
   function resetState(el) { states.delete(el); el.removeAttribute("data-gmap-state"); }
   function busy(el) { var s = states.get(el); return s === "loading" || s === "ready"; }
 
+  // Browser callbacks (iframe and image events, visibility, IntersectionObserver) run outside the
+  // public API's guard; a failure inside one is logged instead of thrown.
+  function guarded(el, what, fn) {
+    return function () {
+      try { return fn.apply(this, arguments); } catch (e) { fail(el, what, e); }
+    };
+  }
+
+  // Detaches a map's marker, popup and listeners and forgets the instance.
+  function releaseInstance(el) {
+    var inst = instances.get(el);
+    instances.delete(el);
+    if (!inst) return;
+    try {
+      if (inst.infoWindow && inst.infoWindow.close) inst.infoWindow.close();
+      if (inst.marker) { if (inst.marker.setMap) inst.marker.setMap(null); else inst.marker.map = null; }
+      if (inst.map && google.maps.event && google.maps.event.clearInstanceListeners) google.maps.event.clearInstanceListeners(inst.map);
+    } catch (e) { /* the map is being discarded */ }
+  }
+
   // The last layer: the map is removed and the fallback link shows. Visitors see no message;
   // the reason is in the console and in the gmap:error event.
   function showFallback(el, o, reason, err) {
     keepFocus(el);
+    releaseInstance(el);   // get() returns null; built stays set, so the map is never billed again
     removeAll(el, ".lgm-canvas, .lgm-preview");
     if (o) ensurePlaceholder(el, o);
     setState(el, "error", { reason: reason, error: err || null });
@@ -403,12 +428,12 @@
     iframe.loading = "lazy";
     iframe.allowFullscreen = true;
     iframe.referrerPolicy = "no-referrer-when-downgrade";
-    iframe.addEventListener("load", function () {
+    iframe.addEventListener("load", guarded(el, "the embed could not be shown.", function () {
       if (gen(el) !== g) return;
       keepFocus(el);
       removePlaceholders(el);
       setState(el, "ready", instances.get(el));
-    }, { once: true });
+    }), { once: true });
     instances.set(el, { iframe: iframe });
     setState(el, "loading");
     iframe.src = embedUrl(o);
@@ -478,14 +503,14 @@
     img.referrerPolicy = "no-referrer-when-downgrade"; // referrer-restricted keys need the Referer
     // If the image fails (Static Maps API not enabled, quota, signing), drop to the plain
     // "Show map" button: the map still loads on click.
-    img.addEventListener("error", function () {
+    img.addEventListener("error", guarded(el, "the static preview could not be replaced.", function () {
       if (gen(el) !== g || states.get(el) !== "preview") return;
       warnOnce("static", "the static preview image did not load; showing the \"Show map\" button instead. " +
         "Check that the Maps Static API is enabled for the key.", el);
       keepFocus(el);
       btn.remove();
       setState(el, "waiting", { mode: o.mode, trigger: o.trigger });
-    }, { once: true });
+    }), { once: true });
     img.src = staticUrl(el, o);
     var badge = document.createElement("span");
     badge.className = "lgm-badge";
@@ -519,9 +544,11 @@
   function hookAuthFailure() {
     var siteHook = window.gm_authFailure;
     function onAuthFailure() {
+      if (!authFailed) {  // Google calls this once per map; log it once
+        console.error("lazy-gmaps: Google rejected the API key (gm_authFailure). Check the key's restrictions, " +
+          "enabled APIs and billing. Dynamic maps show the fallback link instead.");
+      }
       authFailed = true;
-      console.error("lazy-gmaps: Google rejected the API key (gm_authFailure). Check the key's restrictions, " +
-        "enabled APIs and billing. Dynamic maps show the fallback link instead.");
       document.querySelectorAll(SELECTOR).forEach(function (el) {
         try {
           var o = settings.get(el);
@@ -544,9 +571,11 @@
   // Another <script> (an old theme tag, a plugin) that loads Google Maps. Loading a second copy
   // breaks both, so dynamic maps do not load while it is on the page. Embeds are unaffected.
   function otherMapsScript() {
-    if (apiInstalled) return null;
-    var tag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"], script[src*="maps.google.com/maps/api/js"]');
-    if (tag) return tag;
+    var tags = document.querySelectorAll('script[src*="maps.googleapis.com/maps/api/js"], script[src*="maps.google.com/maps/api/js"]');
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].src.indexOf("callback=google.maps.__ib__") === -1) return tags[i]; // not ours
+    }
+    if (apiInstalled) return null;   // window.google.maps is ours from here on
     var m = window.google && window.google.maps;
     if (m && (typeof m.Map === "function" || typeof m.importLibrary === "function")) return "window.google.maps";
     return null;
@@ -747,8 +776,9 @@
     }
   }
 
-  // Loads a map now, bypassing the viewport, click and bot checks (used by [data-gmap-load]).
-  function load(el, extra) {
+  // Loads a map now, bypassing the viewport and click checks. Dynamic maps are still skipped for
+  // bots unless the visitor clicked the map's own button (byClick), so site code cannot bill a bot.
+  function load(el, extra, byClick) {
     if (!isElement(el)) { fail(null, "load() needs a map container element."); return Promise.resolve(); }
     if (!started) { destroyedEarly.delete(el); earlyLoads.push([el, extra]); return Promise.resolve(); }
     var o = settings.get(el);
@@ -764,6 +794,7 @@
     o = settings.get(el);
     if (!o || o.invalid) return Promise.resolve();
     if (o.mode === "embed") { renderEmbed(el); return Promise.resolve(); }
+    if (!byClick && isBotVisitor()) return Promise.resolve(); // stays "skipped" with its button
     return activateDynamic(el);
   }
 
@@ -775,7 +806,7 @@
       // Only before the map loads; clicks inside a live map, or after an error, are not touched.
       if (!btn || !el.contains(btn) || (s !== "waiting" && s !== "preview" && s !== "skipped")) return;
       e.preventDefault();
-      safeLoad(el);
+      clickLoad(el);
     }
     wired.set(el, onClick);
     el.addEventListener("click", onClick);
@@ -798,16 +829,16 @@
 
   function observe(el) {
     var g = gen(el);
-    whenViewable(function () {
+    whenViewable(guarded(el, "this map could not be watched for scrolling into view.", function () {
       if (gen(el) !== g || !settings.has(el)) return;
       if (!("IntersectionObserver" in window)) { onVisible(el); return; } // no lazy loading support
       if (!observer) {
         var seen = function (entries) {
-          entries.forEach(function (en) {
+          entries.forEach(guarded(null, "a map scrolling into view could not be handled.", function (en) {
             if (!en.isIntersecting) return;
             observer.unobserve(en.target);
             onVisible(en.target);
-          });
+          }));
         };
         try { observer = new IntersectionObserver(seen, { rootMargin: config.rootMargin }); }
         catch (e) {
@@ -816,7 +847,7 @@
         }
       }
       observer.observe(el);
-    });
+    }));
   }
 
   function validate(el, o) {
@@ -846,8 +877,7 @@
 
     if (o.mode === "dynamic") {          // billed, including static previews
       if (dynamicBlocked(el, o)) return;
-      if (botResult === null) botResult = isLikelyBot();
-      if (botResult) { setState(el, "skipped", { reason: "bot" }); return; }
+      if (isBotVisitor()) { setState(el, "skipped", { reason: "bot" }); return; }
     }
     setState(el, "waiting", { mode: o.mode, trigger: o.trigger });
     if (o.trigger === "click" && !(o.mode === "dynamic" && o.preview)) return;
@@ -877,16 +907,17 @@
   }
 
   // Resolves with { map, marker, infoWindow } (or { iframe }) once the map is shown, or with
-  // null if the map is destroyed first.
+  // null if the map fails or is destroyed first. Waits while the map can still load.
   function ready(el) {
     return new Promise(function (resolve) {
       if (!isElement(el)) { resolve(null); return; }
       if (states.get(el) === "ready") { resolve(instances.get(el) || null); return; }
-      var names = ["ready", "destroy"];
+      if (states.get(el) === "error") { resolve(null); return; }
+      var names = ["ready", "error", "destroy"];
       function done(e) {
         if (e.target !== el) return;               // ignore events bubbling from nested containers
         names.forEach(function (n) { el.removeEventListener("gmap:" + n, done); });
-        resolve(e.type === "gmap:destroy" ? null : instances.get(el) || null);
+        resolve(e.type === "gmap:ready" ? instances.get(el) || null : null);
       }
       names.forEach(function (n) { el.addEventListener("gmap:" + n, done); });
     });
@@ -896,10 +927,20 @@
   function update(el, changes) {
     var o = isElement(el) && settings.get(el);
     if (!o || !changes) return;
+    // Check everything first; a bad value leaves the map as it was.
+    var next = {}, bad = [];
     ["lat", "lng", "zoom", "query"].forEach(function (k) {
-      if (changes[k] === undefined || changes[k] === null) return;
-      o[k] = k === "query" ? String(changes[k]) : +changes[k];
-      el.setAttribute("data-gmap-" + k, changes[k]);
+      var v = changes[k];
+      if (v === undefined || v === null) return;
+      if (k === "query") { next.query = String(v); return; }
+      var n = typeof v === "string" && v.trim() === "" ? NaN : +v;
+      var ok = isFinite(n) && (k !== "lat" || Math.abs(n) <= 90) && (k !== "zoom" || (n >= 0 && n <= 22));
+      if (ok) next[k] = n; else bad.push(k + "=" + JSON.stringify(v));
+    });
+    if (bad.length) { fail(el, "update() ignored: invalid " + bad.join(", ") + "."); return; }
+    Object.keys(next).forEach(function (k) {
+      o[k] = next[k];
+      el.setAttribute("data-gmap-" + k, next[k]);
     });
     o.hasPoint = isFinite(o.lat) && isFinite(o.lng);
     var inst = instances.get(el), pos = { lat: o.lat, lng: o.lng };
@@ -926,17 +967,9 @@
     if (!settings.has(el) && !states.has(el)) return;
     generations.set(el, gen(el) + 1);     // cancels any load in progress
     if (observer) observer.unobserve(el);
-    var inst = instances.get(el) || null;
-    emit(el, "destroy", inst);
-    if (inst) {
-      try {
-        if (inst.infoWindow && inst.infoWindow.close) inst.infoWindow.close();
-        if (inst.marker) { if (inst.marker.setMap) inst.marker.setMap(null); else inst.marker.map = null; }
-        if (inst.map && google.maps.event && google.maps.event.clearInstanceListeners) google.maps.event.clearInstanceListeners(inst.map);
-      } catch (e) { /* the map is being discarded */ }
-    }
+    emit(el, "destroy", instances.get(el) || null);
+    releaseInstance(el);
     removeAll(el, ".lgm-canvas, .lgm-preview, .lgm-placeholder");
-    instances.delete(el);
     settings.delete(el);
     built.delete(el);
     resetState(el);
@@ -962,7 +995,8 @@
     };
   }
   function resolved() { return Promise.resolve(null); }
-  var safeLoad = guard("load", load, resolved);
+  var safeLoad = guard("load", function (el, extra) { return load(el, extra, false); }, resolved);
+  var clickLoad = guard("load", function (el) { return load(el, undefined, true); }, resolved);
   var safeScan = guard("scan", scan);
 
   window.LazyGMaps = {
