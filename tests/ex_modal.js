@@ -1,0 +1,28 @@
+// extra: modal on the examples page
+const { chromium } = require("playwright");
+const fs = require("fs");
+const [WRAP, HTML] = process.argv.slice(2).map((f) => fs.readFileSync(f, "utf8"));
+const MOCK = fs.readFileSync(__dirname + "/suite.js", "utf8").match(/const MOCK_API = `([\s\S]*?)`;/)[1];
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
+(async () => {
+  const b = await chromium.launch({ executablePath: process.env.CHROME || undefined });
+  const ctx = await b.newContext({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36", viewport: { width: 1280, height: 4000 } });
+  await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
+  const errs = [];
+  await ctx.route("https://site.test/**", (r) => { const u = r.request().url();
+    return u.endsWith("lazy-gmaps.js") ? r.fulfill({ contentType: "text/javascript", body: WRAP }) : u.endsWith(".png") ? r.fulfill({ contentType: "image/png", body: PNG }) : r.fulfill({ contentType: "text/html", body: HTML }); });
+  await ctx.route("https://maps.googleapis.com/maps/api/js**", (r) => r.fulfill({ contentType: "text/javascript", body: MOCK }));
+  await ctx.route("https://maps.googleapis.com/maps/api/staticmap**", (r) => r.fulfill({ contentType: "image/png", body: PNG }));
+  await ctx.route("https://www.google.com/maps/embed/**", (r) => r.fulfill({ contentType: "text/html", body: "<p>embed</p>" }));
+  const p = await ctx.newPage();
+  p.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errs.push(m.text()); });
+  p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto("https://site.test/"); await p.waitForTimeout(600);
+  const before = await p.evaluate(() => window.__maps.length);
+  await p.click("text=Head office >> nth=0"); await p.waitForTimeout(300);
+  await p.click("dialog button"); await p.waitForTimeout(100);
+  await p.click("text=Bunbury"); await p.waitForTimeout(300);
+  const r = await p.evaluate(() => ({ maps: window.__maps.map((m) => m.center.lat), info: (window.__info || []).map((i) => i.html), open: document.getElementById("map-dialog").open }));
+  console.log(JSON.stringify({ before, r, errs }));
+  await b.close();
+})();

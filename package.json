@@ -1,0 +1,22 @@
+{
+  "name": "lazy-gmaps",
+  "version": "0.1.0",
+  "description": "Lazy-loaded Google Maps: free embeds, dynamic maps, click-to-load previews and bot filtering. One file, no dependencies.",
+  "license": "MIT",
+  "author": "Damian Justin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damianjustin/lazy-gmaps.git"
+  },
+  "homepage": "https://github.com/damianjustin/lazy-gmaps#readme",
+  "bugs": "https://github.com/damianjustin/lazy-gmaps/issues",
+  "keywords": ["google-maps", "lazy-load", "maps", "wordpress"],
+  "main": "lazy-gmaps.js",
+  "files": ["lazy-gmaps.js", "THIRD-PARTY-NOTICES.md"],
+  "scripts": {
+    "test": "node tests/run-all.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
