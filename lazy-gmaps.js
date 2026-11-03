@@ -11,7 +11,7 @@
  *
  * Markup:   <div data-gmap data-gmap-lat="-31.95" data-gmap-lng="115.86"></div>
  * Config:   window.lazyGMapsConfig = { key: "YOUR_API_KEY" }   (before this script)
- * Docs:     README.md
+ * Docs:     https://github.com/damianjustin/lazy-gmaps#readme
  *
  * Visitors never see an error: anything that goes wrong falls back to the simplest layer
  * that still works (the map, then the fallback link) and is explained in the console.
@@ -93,7 +93,7 @@
     var src = window.lazyGMapsConfig, added = false;
     if (src == null) return;
     [].concat(src).forEach(function (part) {
-      if (!isObject(part)) { warnOnce("cfgtype", "lazyGMapsConfig entries must be objects; ignored one."); return; }
+      if (!isObject(part)) { warnOnce("cfgtype", "lazyGMapsConfig entries must be objects; one entry was ignored."); return; }
       if (seenConfig.has(part)) return;
       seenConfig.add(part);
       if (started) {
@@ -435,19 +435,23 @@
     var signed = attr(el, "static-src"); // a URL signed on the server is used as is
     if (signed) return signed;
     loaderLocked = true;
-    // Static Maps images are at most 640x640 CSS pixels. Larger boxes request a proportionally
-    // smaller image, which is scaled up to show the same area as the live map.
+    // Static Maps images are at most 640x640 CSS pixels. For larger boxes, each zoom level out
+    // halves the image size needed, so the scaled-up image shows the same area as the live map.
     var r = el.getBoundingClientRect();
     var bw = Math.round(r.width) || 640, bh = Math.round(r.height) || 400;
-    var f = Math.min(1, 640 / Math.max(bw, bh));
+    var out = 0;
+    while (Math.max(bw, bh) / Math.pow(2, out) > 640 && out < o.zoom) out++;
+    var f = 1 / Math.pow(2, out);
     var p = new URLSearchParams();
     p.set("center", o.lat + "," + o.lng);
-    p.set("zoom", String(o.zoom));
-    p.set("size", Math.max(1, Math.round(bw * f)) + "x" + Math.max(1, Math.round(bh * f)));
+    p.set("zoom", String(o.zoom - out));
+    p.set("size", Math.min(640, Math.max(1, Math.round(bw * f))) + "x" + Math.min(640, Math.max(1, Math.round(bh * f))));
     p.set("scale", "2");
     if (o.showMarker) {
-      // With a marker size the icon is a 2x image; marker scale:2 renders it at that size.
-      p.set("markers", (o.markerIcon ? (o.markerSize ? "scale:2|" : "") + "icon:" + o.markerIcon + "|" : "") + o.lat + "," + o.lng);
+      // With a marker size the icon is a 2x image; marker scale:2 renders it at that size. Each
+      // zoom level out doubles the scale so the pin keeps its size (Static Maps allows 1, 2, 4).
+      var ms = Math.min(4, (o.markerSize ? 2 : 1) * Math.pow(2, out));
+      p.set("markers", (o.markerIcon ? (ms > 1 ? "scale:" + ms + "|" : "") + "icon:" + o.markerIcon + "|" : "") + o.lat + "," + o.lng);
     }
     if (o.mapId) p.set("map_id", o.mapId);
     else staticStyles(o.styles).forEach(function (s) { p.append("style", s); });
@@ -460,6 +464,7 @@
     if (states.get(el) !== "waiting") return;
     var o = current(el), g = gen(el);
     if (!o || o.invalid) return;
+    if (dynamicBlocked(el, o)) return;   // a key rejected, or a Maps tag added, since setup
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "lgm-preview";
@@ -470,6 +475,7 @@
     img.style.cssText = "width:100%;height:100%;max-width:none;object-fit:cover;display:block";
     img.alt = o.title || "";
     img.decoding = "async";
+    img.referrerPolicy = "no-referrer-when-downgrade"; // referrer-restricted keys need the Referer
     // If the image fails (Static Maps API not enabled, quota, signing), drop to the plain
     // "Show map" button: the map still loads on click.
     img.addEventListener("error", function () {
@@ -520,7 +526,7 @@
         try {
           var o = settings.get(el);
           if (o && o.mode === "dynamic" && busy(el)) showFallback(el, o, "auth");
-        } catch (e) { fail(el, "could not show the fallback", e); }
+        } catch (e) { fail(el, "could not show the fallback.", e); }
       });
       if (typeof siteHook === "function") return siteHook.apply(this, arguments);
     }
@@ -795,13 +801,20 @@
     whenViewable(function () {
       if (gen(el) !== g || !settings.has(el)) return;
       if (!("IntersectionObserver" in window)) { onVisible(el); return; } // no lazy loading support
-      observer = observer || new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) {
-          if (!en.isIntersecting) return;
-          observer.unobserve(en.target);
-          onVisible(en.target);
-        });
-      }, { rootMargin: config.rootMargin });
+      if (!observer) {
+        var seen = function (entries) {
+          entries.forEach(function (en) {
+            if (!en.isIntersecting) return;
+            observer.unobserve(en.target);
+            onVisible(en.target);
+          });
+        };
+        try { observer = new IntersectionObserver(seen, { rootMargin: config.rootMargin }); }
+        catch (e) {
+          fail(null, 'rootMargin "' + config.rootMargin + '" is not valid; using "' + DEFAULTS.rootMargin + '".', e);
+          observer = new IntersectionObserver(seen, { rootMargin: DEFAULTS.rootMargin });
+        }
+      }
       observer.observe(el);
     });
   }
@@ -817,7 +830,7 @@
     if (o.mode === "embed" && (o.init || attr(el, "marker") || attr(el, "map-id"))) {
       warnOnce("embedAttrs", "data-gmap-init, data-gmap-marker and data-gmap-map-id apply to dynamic maps only.", el);
     }
-    if (el.getBoundingClientRect().height === 0 && getComputedStyle(el).display !== "none") {
+    if (el.getClientRects().length && el.getBoundingClientRect().height === 0) { // not hidden, just no height
       warnOnce("height", "a map container has zero height; give it a CSS height.", el);
     }
     return true;
@@ -936,8 +949,8 @@
     started = true;
     try { injectCss(); } catch (e) { fail(null, "the default stylesheet could not be added.", e); }
     blockedBy = otherMapsScript();
+    early.splice(0).forEach(function (a) { safeScan(a[0], a[1]); }); // first, so their settings apply
     scan(document);
-    early.splice(0).forEach(function (a) { safeScan(a[0], a[1]); });
     earlyLoads.splice(0).forEach(function (a) { safeLoad(a[0], a[1]); });
   }
 

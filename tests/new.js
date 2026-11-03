@@ -385,6 +385,35 @@ const DYN = (id, extra = "") => `<div id="${id}" class="map" data-gmap data-gmap
     html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script><script src="/lazy-gmaps.js?2" defer></script>`, DYN("d1")) },
     async (p, snap, check, n, logs) => { check("one map + warning", (await snap()).maps.length === 1 && logs.some((l) => l.includes("included more than once")), logs); });
 
+  // ===================== pre-release review fixes =====================
+  await run(b, "review: scan(el, settings) from a deferred script before start keeps its settings", {
+    files: { "/site.js": "LazyGMaps.scan(document.getElementById('d1'), { zoom: 7 });" },
+    html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script><script src="/site.js" defer></script>`, DYN("d1")) },
+    async (p, snap, check) => { const s = await snap(); check("map built at zoom 7", s.states[0] === "d1=ready" && s.maps.length === 1 && s.maps[0].zoom === 7, s); });
+  await run(b, "review: after the key is rejected, a click map scrolled into view requests no static preview", {
+    html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script>`, DYN("d1") + `<div class="spacer"></div>` + DYN("c1", `data-gmap-trigger="click"`)) },
+    async (p, snap, check, n) => {
+      await p.evaluate(() => window.gm_authFailure());
+      await p.evaluate(() => document.getElementById("c1").scrollIntoView()); await p.waitForTimeout(400);
+      const s = await snap();
+      check("no static request, c1 in error", n.staticReq.length === 0 && s.states.join() === "d1=error,c1=error", { s, n });
+    });
+  await run(b, "review: an invalid rootMargin is reported and the default is used", {
+    html: doc(`<script>window.lazyGMapsConfig={key:'K', rootMargin:'200'}</script><script src="/lazy-gmaps.js" defer></script>`, DYN("d1")) },
+    async (p, snap, check, n, logs) => {
+      const s = await snap();
+      check("map ready, error logged, no page error", s.states[0] === "d1=ready" && logs.some((l) => l.includes('rootMargin "200" is not valid')) && !logs.some((l) => l.startsWith("pageerror")), { s, logs });
+    });
+  await run(b, "review: a map inside a hidden parent does not warn about zero height", {
+    html: doc(`<script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script>`, `<div style="display:none">${DYN("d1")}</div>`) },
+    async (p, snap, check, n, logs) => { check("no zero-height warning", !logs.some((l) => l.includes("zero height")), logs); });
+  await run(b, "review: the static preview image sends the referrer, like the embed iframe", {
+    html: doc(`<meta name="referrer" content="same-origin"><script>window.lazyGMapsConfig={key:'K'}</script><script src="/lazy-gmaps.js" defer></script>`, DYN("c1", `data-gmap-trigger="click"`)) },
+    async (p, snap, check, n) => {
+      const rp = await p.evaluate(() => { const i = document.querySelector("#c1 .lgm-preview img"); return i && i.referrerPolicy; });
+      check("referrerPolicy set", rp === "no-referrer-when-downgrade" && n.staticReq.length === 1, { rp, n });
+    });
+
   await b.close();
   console.log(`\n${total - failed}/${total} new-feature scenarios passed`);
   process.exit(failed ? 1 : 0);

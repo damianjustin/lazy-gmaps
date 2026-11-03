@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>lazy-gmaps.js examples</title>
 
-  <!-- Configuration first, then the helper with defer. -->
+  <!-- Configuration first, then lazy-gmaps.js with defer. -->
   <script>
     window.lazyGMapsConfig = {
       key: "YOUR_API_KEY",
-      marker: "/img/marker@2x.png",     // default marker for dynamic maps (2x PNG)
+      marker: "/img/marker@2x.png",     // your default marker for dynamic maps (a 2× PNG)
       markerSize: "24x33",              // shown at this size
       popupTemplate: "#map-popup",      // every popup uses this template
       styles: {
@@ -20,7 +20,7 @@
       loaderParams: { language: "en", region: "AU" }
     };
   </script>
-  <script src="/js/lazy-gmaps.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js" defer></script>
 
   <style>
     body { font: 16px/1.5 system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; }
@@ -50,7 +50,7 @@
   <div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-trigger="click"
        data-gmap-lat="-31.9900" data-gmap-lng="115.7600" data-gmap-zoom="15"
        data-gmap-options='{"disableDefaultUI": true, "zoomControl": true}'
-       data-gmap-title="Display home" data-gmap-popup="Open Saturday and Sunday, 1–5pm">
+       data-gmap-title="Showroom" data-gmap-popup="Open Saturday and Sunday, 1–5pm">
     <!-- Server-rendered fallback for visitors without JavaScript; removed when the map loads. -->
     <a data-gmap-placeholder href="https://www.google.com/maps/search/?api=1&amp;query=-31.99,115.76">Open in Google Maps</a>
   </div>
@@ -70,17 +70,22 @@
 
   <!-- Init functions are defined in the page (or a script loaded before the page finishes parsing). -->
   <script>
-    // Init function: receives the map the helper built and this map's options.
+    // Init function: receives the map lazy-gmaps.js built and this map's options.
     function addLocations(map, ctx) {
       const locations = [
-        { name: "Coastal 4-Bed", lat: -31.990, lng: 115.760 },
-        { name: "Hills Retreat", lat: -31.930, lng: 116.010 },
-        { name: "City Terrace",  lat: -31.950, lng: 115.870 }
+        { name: "Coast office", lat: -31.990, lng: 115.760 },
+        { name: "Hills office", lat: -31.930, lng: 116.010 },
+        { name: "City office",  lat: -31.950, lng: 115.870 }
       ];
+      // Use the site's default marker, shown at markerSize.
+      const { markerIcon, markerSize } = ctx.options;
+      const icon = markerIcon && markerSize
+        ? { url: markerIcon, scaledSize: new google.maps.Size(markerSize.w, markerSize.h) }
+        : markerIcon || undefined;
       const info = new google.maps.InfoWindow();
       const bounds = new google.maps.LatLngBounds();
       locations.forEach((l) => {
-        const marker = new google.maps.Marker({ map, position: l, title: l.name, icon: ctx.options.markerIcon || undefined });
+        const marker = new google.maps.Marker({ map, position: l, title: l.name, icon });
         marker.addListener("click", () => { info.setContent(l.name); info.open({ map, anchor: marker }); });
         bounds.extend(l);
       });

@@ -166,14 +166,14 @@ const D = (id, extra = "") => `<div id="${id}" class="map" data-gmap data-gmap-m
 
   // ================= dynamic, click =================
   const DC = D("c1", `data-gmap-trigger="click" data-gmap-zoom="13" data-gmap-marker="/img/pin@2x.png" data-gmap-marker-size="24x33" data-gmap-title="Lot 460"`);
-  await run(b, "dynamic click: static preview (proportional size, 2x pin, styles), no script until click; click builds same map; focus kept", {
+  await run(b, "dynamic click: static preview (730px box: one zoom level out at half size, pin kept at size, styles), no script until click; click builds same map; focus kept", {
     page: { cfg: "{key:'K', styles:[{featureType:'road',stylers:[{saturation:-70},{hue:'#e7ecf0'}]}]}",
       body: `<div style="width:730px;height:280px">${DC.replace('class="map"', 'style="width:100%;height:100%"')}</div>` } },
     async (p, snap, check, n) => {
       let s = await snap(); const u = n.staticReq[0];
       check("1 static, no script, preview", n.staticReq.length === 1 && n.script === 0 && s.states[0] === "c1=preview", { n, s });
-      check("static params", q(u, "center") === "-31.9523,115.8613" && q(u, "zoom") === "13" && q(u, "size") === "640x245" && q(u, "scale") === "2" &&
-        q(u, "markers") === "scale:2|icon:https://site.test/img/pin@2x.png|-31.9523,115.8613" && q(u, "style") === "feature:road|saturation:-70|hue:0xe7ecf0", u);
+      check("static params", q(u, "center") === "-31.9523,115.8613" && q(u, "zoom") === "12" && q(u, "size") === "365x140" && q(u, "scale") === "2" &&
+        q(u, "markers") === "scale:4|icon:https://site.test/img/pin@2x.png|-31.9523,115.8613" && q(u, "style") === "feature:road|saturation:-70|hue:0xe7ecf0", u);
       await p.focus("#c1 .lgm-preview"); await p.keyboard.press("Enter"); await p.waitForTimeout(400);
       s = await snap();
       check("1 map, same zoom + styles, ready, preview gone", s.maps.length === 1 && s.maps[0].zoom === 13 && s.maps[0].styles && s.states[0] === "c1=ready" && s.placeholders === 0, s);

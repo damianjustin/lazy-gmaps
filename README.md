@@ -10,15 +10,11 @@ Lazy-loaded Google Maps for any website: free embeds, dynamic maps, click-to-loa
 
 ## Features
 
-- **Two map modes.** `embed` uses the Maps Embed API (an iframe with Google's marker; no usage charge). `dynamic` uses the Maps JavaScript API, with custom markers, popups, styles and map options.
-- **Lazy loading.** Maps load as they approach the viewport, never during a speculative prerender or in a hidden tab. Google's script is downloaded only when the first dynamic map needs it, and only once per page.
-- **Click to load.** A dynamic map can show a static image of itself until it is clicked.
-- **Bot filtering.** Dynamic maps and static previews are not loaded for crawlers, link-preview services, automation tools or HTTP clients.
-- **Extensible.** An init function receives each finished map for custom markers, overlays or layers.
-- **Lifecycle API and events.** `ready`, `update`, `destroy` and bubbling `gmap:*` events.
-- **Site-wide defaults.** Key, marker, styles (including dark mode), popup template and map options are set once in configuration.
-- **Progressive enhancement.** Server-rendered fallback content is kept until the map replaces it.
-- **Quiet failures.** Visitors never see an error message. If a map cannot load, the container shows its fallback link; the reason is in the console.
+- Embed maps use the Maps Embed API, which has no usage charge. Dynamic maps use the Maps JavaScript API, with custom markers, popups, styles and map options.
+- Maps load as they approach the viewport, never during a prerender or in a hidden tab. Google's script is downloaded once, when the first dynamic map needs it.
+- A dynamic map can show a static image of itself until it is clicked.
+- Dynamic maps and static previews are not loaded for crawlers, link-preview services, automation tools or HTTP clients.
+- Visitors never see an error message. If a map cannot load, the container shows a link to Google Maps and the reason is logged to the console.
 
 ## Contents
 
@@ -50,7 +46,7 @@ Add the configuration, then the script with `defer`, to the `<head>` of every pa
 <script src="https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js" defer></script>
 ```
 
-To host the file yourself, install it from npm (`npm install lazy-gmaps`) or download `lazy-gmaps.js`, and point `src` at your copy.
+A minified copy is at `https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.min.js`. To host the file yourself, install it from npm (`npm install lazy-gmaps`) and point `src` at your copy of `lazy-gmaps.js` or `lazy-gmaps.min.js`.
 
 The key needs the Maps JavaScript API, Maps Static API and Maps Embed API enabled.
 
@@ -106,10 +102,15 @@ On an embed map, `data-gmap-trigger="click"` shows a "Show map" button.
      data-gmap-init="addListings"></div>
 
 <script>
+  const listings = [
+    { title: "North", position: { lat: -31.89, lng: 115.84 } },
+    { title: "South", position: { lat: -32.05, lng: 115.88 } }
+  ];
+
   function addListings(map, ctx) {
     const bounds = new google.maps.LatLngBounds();
     listings.forEach((listing) => {
-      new google.maps.Marker({ map, position: listing.position, icon: ctx.options.markerIcon });
+      new google.maps.Marker({ map, position: listing.position, title: listing.title });
       bounds.extend(listing.position);
     });
     map.fitBounds(bounds);
@@ -129,7 +130,7 @@ Define the function in the page or in a script that loads before the page finish
 
 A map with an init function has no default marker; its coordinates set the initial view. Add `data-gmap-marker="show"` (or popup text) to keep the default marker. The function may return a promise. Several maps can share one function, or each can name its own. A dotted name such as `Site.maps.init` is also accepted.
 
-If the function is missing or throws, the map is still shown with its centre, zoom, styles and marker, and the error is logged to the console.
+If the function is missing or throws, the map is still shown with its centre, zoom and styles (and its default marker, if it has one), and the error is logged to the console.
 
 ### Styles and dark mode
 
@@ -173,7 +174,8 @@ To use the same layout for every popup, point `popupTemplate` at a `<template>` 
 Any `google.maps.Map` option can be set for all dynamic maps with `mapOptions`, and per map with JSON in `data-gmap-options`:
 
 ```html
-<div data-gmap data-gmap-mode="dynamic" data-gmap-options='{"disableDefaultUI": true, "zoomControl": true}' …></div>
+<div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-lat="-31.95" data-gmap-lng="115.86"
+     data-gmap-options='{"disableDefaultUI": true, "zoomControl": true}'></div>
 ```
 
 ### Maps added after page load
@@ -263,7 +265,7 @@ All configuration must be in place before lazy-gmaps.js: in inline scripts or sc
 | --- | --- |
 | `LazyGMaps.scan(root?, settings?)` | Sets up containers inside `root` (or `root` itself) that are not yet set up. `settings` apply to those maps only. |
 | `LazyGMaps.load(el, settings?)` | Loads a map immediately, ignoring the viewport, click and bot checks. `settings` apply to this map only. |
-| `LazyGMaps.ready(el)` | Promise resolving with `{ map, marker, infoWindow }` (or `{ iframe }`) once the map is shown, or with `null` if it is destroyed first. |
+| `LazyGMaps.ready(el)` | Promise resolving with `{ map, marker, infoWindow }` (or `{ iframe }`) once the map is shown, or with `null` if it is destroyed first. It stays pending while the map is waiting, skipped or in error. |
 | `LazyGMaps.update(el, { lat, lng, zoom, query })` | Moves a map and its marker without rebuilding it. |
 | `LazyGMaps.destroy(el)` | Removes a map, its click handling and its state, cancelling any load in progress. The container can then be set up again with `scan()` or `load()`. |
 | `LazyGMaps.get(el)` | `{ map, marker, infoWindow }`, `{ iframe }` or `null`. |
@@ -273,7 +275,7 @@ All configuration must be in place before lazy-gmaps.js: in inline scripts or sc
 
 Per-call `settings` take the same form as `lazyGMapsConfig`. `key`, `v`, `loaderParams`, `isBot`, `css`, `debug` and `rootMargin` apply to the whole page and are set only in `lazyGMapsConfig`.
 
-The API does not throw: invalid arguments are reported in the console.
+The API does not throw.
 
 ## States and events
 
@@ -343,8 +345,9 @@ Visitors never see an error message. When a map cannot be shown, the container s
 Problems that leave a usable map are logged without changing the state:
 
 - a missing or failing init function (the base map is shown);
-- a marker icon or popup template that cannot be used;
-- a static preview image that fails to load (a "Show map" button replaces it).
+- a marker icon or popup template that cannot be used.
+
+A static preview image that fails to load is replaced by the "Show map" button, and the state returns to `waiting`.
 
 ## Script loading
 
@@ -367,13 +370,10 @@ Dynamic maps and their static previews are not loaded when the visitor:
 Embed maps are always loaded, because the Maps Embed API has no usage charge.
 
 The check identifies clients that declare themselves; it cannot identify automation that imitates a current browser. Visitors identified in error can load the map with the "Show map" button. Replace the check with the `isBot` setting.
-
-The check has been tested against 36 browsers and in-app browsers (no false positives) and 59 crawlers, preview services and tools (all identified).
-
 ## Security
 
-- **Restrict the API key** to your sites' HTTP referrers, and to the Maps JavaScript API, Maps Static API and Maps Embed API. The key is visible in page source, as with any browser use of Google Maps.
-- **Set daily quotas** for the Dynamic Maps and Static Maps SKUs in the Google Cloud console.
+- **API key:** restrict it to your sites' HTTP referrers, and to the Maps JavaScript API, Maps Static API and Maps Embed API. The key is visible in page source, as with any browser use of Google Maps.
+- **Quotas:** set daily quotas for the Dynamic Maps and Static Maps SKUs in the Google Cloud console.
 - **Signed Static Maps URLs:** Google recommends signing Maps Static API requests. Sign on the server, keep the signing secret there, and pass the signed URL in `data-gmap-static-src`.
 - **Content Security Policy:** with a nonce-based policy, lazy-gmaps.js and Google's loader reuse the page's nonce. Allow `https://maps.googleapis.com` in `img-src` for previews and `https://www.google.com` in `frame-src` for embeds. See Google's [CSP guide](https://developers.google.com/maps/documentation/javascript/content-security-policy) for allowlist policies.
 - **Key errors:** lazy-gmaps.js handles `window.gm_authFailure`. A handler assigned with `window.gm_authFailure = …` is also called.
@@ -400,7 +400,7 @@ Configuration errors are always logged, for example:
 
 ## Browser support
 
-The browsers supported by the Maps JavaScript API: current Chrome, Edge and Firefox; the two latest Safari versions; current and previous iOS. Browsers without IntersectionObserver load maps immediately.
+The browsers supported by the Maps JavaScript API: current Chrome, Edge and Firefox; the two latest Safari versions; current and previous iOS.
 
 ## Licence
 

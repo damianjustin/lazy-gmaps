@@ -9,6 +9,7 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
   const ctx = await b.newContext({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36", viewport: { width: 1280, height: 4000 } });
   await ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
   const errs = [];
+  await ctx.route("https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js", (r) => r.fulfill({ contentType: "text/javascript", body: WRAP }));
   await ctx.route("https://site.test/**", (r) => { const u = r.request().url();
     return u.endsWith("lazy-gmaps.js") ? r.fulfill({ contentType: "text/javascript", body: WRAP }) : u.endsWith(".png") ? r.fulfill({ contentType: "image/png", body: PNG }) : r.fulfill({ contentType: "text/html", body: HTML }); });
   await ctx.route("https://maps.googleapis.com/maps/api/js**", (r) => r.fulfill({ contentType: "text/javascript", body: MOCK }));
