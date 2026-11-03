@@ -406,6 +406,6 @@ The browsers supported by the Maps JavaScript API: current Chrome, Edge and Fire
 
 lazy-gmaps.js is released under the MIT License. Copyright © 2026 Damian Justin. See [LICENSE](LICENSE).
 
-It includes the Google Maps JavaScript API bootstrap loader, Copyright Google LLC, licensed under the Apache License, Version 2.0. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+It includes the Google Maps JavaScript API bootstrap loader, Copyright Google LLC, licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
 Use of Google Maps Platform is subject to the [Google Maps Platform Terms of Service](https://cloud.google.com/maps-platform/terms).

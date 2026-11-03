@@ -7,7 +7,7 @@
  *
  * Includes the Google Maps JavaScript API "Dynamic Library Import" bootstrap loader,
  * Copyright Google LLC, licensed under the Apache License, Version 2.0.
- * See THIRD-PARTY-NOTICES.md. Use of Google Maps Platform is subject to Google's terms.
+ * See LICENSE. Use of Google Maps Platform is subject to Google's terms.
  *
  * Markup:   <div data-gmap data-gmap-lat="-31.95" data-gmap-lng="115.86"></div>
  * Config:   window.lazyGMapsConfig = { key: "YOUR_API_KEY" }   (before this script)
@@ -492,7 +492,7 @@
 
   // ==========================================================================================
   // Maps JavaScript API: Google's inline bootstrap loader, unmodified.
-  // Copyright Google LLC. Apache License 2.0. See THIRD-PARTY-NOTICES.md.
+  // Copyright Google LLC. Apache License 2.0. See LICENSE.
   // https://developers.google.com/maps/documentation/javascript/load-maps-js-api
   // Defines google.maps.importLibrary without a network request; the API is fetched on the
   // first importLibrary() call, once per page.
