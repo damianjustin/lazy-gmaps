@@ -41,7 +41,7 @@ Add the configuration, then the script with `defer`, to the `<head>` of every pa
 
 ```html
 <script>
-  window.lazyGMapsConfig = { key: "YOUR_API_KEY" };
+    window.lazyGMapsConfig = { key: "YOUR_API_KEY" };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js" defer></script>
 ```
@@ -102,19 +102,19 @@ On an embed map, `data-gmap-trigger="click"` shows a "Show map" button.
      data-gmap-init="addListings"></div>
 
 <script>
-  const listings = [
-    { title: "North", position: { lat: -31.89, lng: 115.84 } },
-    { title: "South", position: { lat: -32.05, lng: 115.88 } }
-  ];
+    const listings = [
+        { title: "North", position: { lat: -31.89, lng: 115.84 } },
+        { title: "South", position: { lat: -32.05, lng: 115.88 } }
+    ];
 
-  function addListings(map, ctx) {
-    const bounds = new google.maps.LatLngBounds();
-    listings.forEach((listing) => {
-      new google.maps.Marker({ map, position: listing.position, title: listing.title });
-      bounds.extend(listing.position);
-    });
-    map.fitBounds(bounds);
-  }
+    function addListings(map, ctx) {
+        const bounds = new google.maps.LatLngBounds();
+        listings.forEach((listing) => {
+            new google.maps.Marker({ map, position: listing.position, title: listing.title });
+            bounds.extend(listing.position);
+        });
+        map.fitBounds(bounds);
+    }
 </script>
 ```
 
@@ -138,13 +138,13 @@ Styles are defined in configuration, either as a single array used by every map 
 
 ```js
 window.lazyGMapsConfig = {
-  key: "YOUR_API_KEY",
-  styles: {
-    "default":      [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
-    "default/dark": [{ featureType: "all", stylers: [{ invert_lightness: true }] }],
-    "muted":        [{ featureType: "all", stylers: [{ saturation: -80 }] }],
-    "muted/dark":   [{ featureType: "all", stylers: [{ saturation: -80 }, { lightness: -60 }] }]
-  }
+    key: "YOUR_API_KEY",
+    styles: {
+        "default":      [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
+        "default/dark": [{ featureType: "all", stylers: [{ invert_lightness: true }] }],
+        "muted":        [{ featureType: "all", stylers: [{ saturation: -80 }] }],
+        "muted/dark":   [{ featureType: "all", stylers: [{ saturation: -80 }, { lightness: -60 }] }]
+    }
 };
 ```
 
@@ -162,7 +162,7 @@ To use the same layout for every popup, point `popupTemplate` at a `<template>` 
 
 ```html
 <template id="map-popup">
-  <div class="popup"><h3 data-gmap-field="title"></h3><p data-gmap-field="popup"></p></div>
+    <div class="popup"><h3 data-gmap-field="title"></h3><p data-gmap-field="popup"></p></div>
 </template>
 <script>window.lazyGMapsConfig = { key: "YOUR_API_KEY", popupTemplate: "#map-popup" };</script>
 ```
@@ -184,12 +184,12 @@ Containers added later (AJAX, tabs, modals) are set up with `LazyGMaps.scan(cont
 
 ```js
 function openModal(lat, lng) {
-  modalBody.innerHTML = `<div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-lat="${lat}" data-gmap-lng="${lng}"></div>`;
-  LazyGMaps.load(modalBody.firstElementChild);
+    modalBody.innerHTML = `<div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-lat="${lat}" data-gmap-lng="${lng}"></div>`;
+    LazyGMaps.load(modalBody.firstElementChild);
 }
 function closeModal() {
-  LazyGMaps.destroy(modalBody.firstElementChild);
-  modalBody.innerHTML = "";
+    LazyGMaps.destroy(modalBody.firstElementChild);
+    modalBody.innerHTML = "";
 }
 ```
 
@@ -302,7 +302,7 @@ After `destroy`, the container has no state.
 
 ```js
 document.addEventListener("gmap:ready", (e) => {
-  analytics.track("map_shown", { id: e.target.id, mode: LazyGMaps.options(e.target).mode });
+    analytics.track("map_shown", { id: e.target.id, mode: LazyGMaps.options(e.target).mode });
 });
 ```
 
@@ -317,15 +317,31 @@ Content inside a container is shown until the map loads:
 - An element marked `data-gmap-load` loads the map when clicked.
 - An empty container receives an "Open in Google Maps" link and a "Show map" button. The button is visible only on maps that load on click and for visitors identified as bots. A container whose content has no `data-gmap-load` element receives the button only.
 
+The default placeholder shows the button and link over a faint street pattern drawn in the page's text colour, so it suits light and dark sites. Adjust it with these custom properties, set on the container or any parent:
+
+| Property | Default | Sets |
+| --- | --- | --- |
+| `--lgm-pin` | `#ea4335` | Pin colour on the button. |
+| `--lgm-button-bg` | `#fff` | Button background, also used by the "Explore map" badge. |
+| `--lgm-button-color` | `#1f1f1f` | Button text colour. |
+| `--lgm-font` | `system-ui, sans-serif` | Button font. |
+| `--lgm-pattern` | `1` | Pattern strength. `0` hides it. |
+
+```css
+.map { --lgm-pin: #0040a8; --lgm-pattern: 0.6; }
+```
+
+For a different design, override the `.lgm-placeholder` rules or turn off the default stylesheet with `css: false`.
+
 To support visitors without JavaScript, render the fallback on the server:
 
 ```php
 <div class="map" data-gmap data-gmap-mode="dynamic"
      data-gmap-lat="<?php echo esc_attr( $lat ); ?>" data-gmap-lng="<?php echo esc_attr( $lng ); ?>">
-  <a data-gmap-placeholder
-     href="https://www.google.com/maps/search/?api=1&amp;query=<?php echo rawurlencode( $lat . ',' . $lng ); ?>">
-    Open in Google Maps
-  </a>
+    <a data-gmap-placeholder
+       href="https://www.google.com/maps/search/?api=1&amp;query=<?php echo rawurlencode( $lat . ',' . $lng ); ?>">
+        Open in Google Maps
+    </a>
 </div>
 ```
 

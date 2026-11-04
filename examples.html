@@ -1,120 +1,120 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lazy-gmaps.js examples</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>lazy-gmaps.js examples</title>
 
-  <!-- Configuration first, then lazy-gmaps.js with defer. -->
-  <script>
-    window.lazyGMapsConfig = {
-      key: "YOUR_API_KEY",
-      marker: "/img/marker@2x.png",     // your default marker for dynamic maps (a 2× PNG)
-      markerSize: "24x33",              // shown at this size
-      popupTemplate: "#map-popup",      // every popup uses this template
-      styles: {
-        "default":      [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
-        "default/dark": [{ featureType: "all", stylers: [{ invert_lightness: true }] }]  // when the browser is in dark mode
-      },
-      mapOptions: { streetViewControl: false },
-      loaderParams: { language: "en", region: "AU" }
-    };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js" defer></script>
+    <!-- Configuration first, then lazy-gmaps.js with defer. -->
+    <script>
+        window.lazyGMapsConfig = {
+            key: "YOUR_API_KEY",
+            marker: "/img/marker@2x.png",     // your default marker for dynamic maps (a 2× PNG)
+            markerSize: "24x33",              // shown at this size
+            popupTemplate: "#map-popup",      // every popup uses this template
+            styles: {
+                "default":      [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
+                "default/dark": [{ featureType: "all", stylers: [{ invert_lightness: true }] }]  // when the browser is in dark mode
+            },
+            mapOptions: { streetViewControl: false },
+            loaderParams: { language: "en", region: "AU" }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/lazy-gmaps@0.1.0/lazy-gmaps.js" defer></script>
 
-  <style>
-    body { font: 16px/1.5 system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; }
-    .map { height: 360px; border-radius: 8px; background: #e8edf1; margin: 12px 0 40px; }
-    .popup h3 { margin: 0 0 4px; font-size: 15px; }
-    .popup p { margin: 0; }
-    dialog { width: min(800px, 90vw); }
-  </style>
+    <style>
+        body { font: 16px/1.5 system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; }
+        .map { height: 360px; border-radius: 8px; background: #e8edf1; margin: 12px 0 40px; }
+        .popup h3 { margin: 0 0 4px; font-size: 15px; }
+        .popup p { margin: 0; }
+        dialog { width: min(800px, 90vw); }
+    </style>
 </head>
 <body>
 
-  <!-- Popup template used by every map (see popupTemplate). Text is inserted as plain text. -->
-  <template id="map-popup">
-    <div class="popup"><h3 data-gmap-field="title"></h3><p data-gmap-field="popup"></p></div>
-  </template>
+    <!-- Popup template used by every map (see popupTemplate). Text is inserted as plain text. -->
+    <template id="map-popup">
+        <div class="popup"><h3 data-gmap-field="title"></h3><p data-gmap-field="popup"></p></div>
+    </template>
 
-  <h2>Embed</h2>
-  <div class="map" data-gmap data-gmap-lat="-31.9523" data-gmap-lng="115.8613" data-gmap-zoom="15"
-       data-gmap-title="Head office"></div>
+    <h2>Embed</h2>
+    <div class="map" data-gmap data-gmap-lat="-31.9523" data-gmap-lng="115.8613" data-gmap-zoom="15"
+         data-gmap-title="Head office"></div>
 
-  <h2>Dynamic</h2>
-  <div class="map" data-gmap data-gmap-mode="dynamic"
-       data-gmap-lat="-31.9523" data-gmap-lng="115.8613" data-gmap-zoom="14"
-       data-gmap-title="Head office" data-gmap-popup="Open Monday to Friday, 9am–5pm"></div>
+    <h2>Dynamic</h2>
+    <div class="map" data-gmap data-gmap-mode="dynamic"
+         data-gmap-lat="-31.9523" data-gmap-lng="115.8613" data-gmap-zoom="14"
+         data-gmap-title="Head office" data-gmap-popup="Open Monday to Friday, 9am–5pm"></div>
 
-  <h2>Dynamic, loaded on click</h2>
-  <div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-trigger="click"
-       data-gmap-lat="-31.9900" data-gmap-lng="115.7600" data-gmap-zoom="15"
-       data-gmap-options='{"disableDefaultUI": true, "zoomControl": true}'
-       data-gmap-title="Showroom" data-gmap-popup="Open Saturday and Sunday, 1–5pm">
-    <!-- Server-rendered fallback for visitors without JavaScript; removed when the map loads. -->
-    <a data-gmap-placeholder href="https://www.google.com/maps/search/?api=1&amp;query=-31.99,115.76">Open in Google Maps</a>
-  </div>
+    <h2>Dynamic, loaded on click</h2>
+    <div class="map" data-gmap data-gmap-mode="dynamic" data-gmap-trigger="click"
+         data-gmap-lat="-31.9900" data-gmap-lng="115.7600" data-gmap-zoom="15"
+         data-gmap-options='{"disableDefaultUI": true, "zoomControl": true}'
+         data-gmap-title="Showroom" data-gmap-popup="Open Saturday and Sunday, 1–5pm">
+        <!-- Server-rendered fallback for visitors without JavaScript; removed when the map loads. -->
+        <a data-gmap-placeholder href="https://www.google.com/maps/search/?api=1&amp;query=-31.99,115.76">Open in Google Maps</a>
+    </div>
 
-  <h2>Dynamic with an init function</h2>
-  <div class="map" data-gmap data-gmap-mode="dynamic"
-       data-gmap-lat="-31.97" data-gmap-lng="115.82" data-gmap-zoom="11"
-       data-gmap-init="addLocations"></div>
+    <h2>Dynamic with an init function</h2>
+    <div class="map" data-gmap data-gmap-mode="dynamic"
+         data-gmap-lat="-31.97" data-gmap-lng="115.82" data-gmap-zoom="11"
+         data-gmap-init="addLocations"></div>
 
-  <h2>In a modal</h2>
-  <button type="button" onclick="openMap(-31.9523, 115.8613, 'Head office')">Head office</button>
-  <button type="button" onclick="openMap(-33.3300, 115.6400, 'Bunbury')">Bunbury</button>
-  <dialog id="map-dialog" onclose="closeMap()">
-    <div id="dialog-map-host"></div>
-    <form method="dialog"><button>Close</button></form>
-  </dialog>
+    <h2>In a modal</h2>
+    <button type="button" onclick="openMap(-31.9523, 115.8613, 'Head office')">Head office</button>
+    <button type="button" onclick="openMap(-33.3300, 115.6400, 'Bunbury')">Bunbury</button>
+    <dialog id="map-dialog" onclose="closeMap()">
+        <div id="dialog-map-host"></div>
+        <form method="dialog"><button>Close</button></form>
+    </dialog>
 
-  <!-- Init functions are defined in the page (or a script loaded before the page finishes parsing). -->
-  <script>
-    // Init function: receives the map lazy-gmaps.js built and this map's options.
-    function addLocations(map, ctx) {
-      const locations = [
-        { name: "Coast office", lat: -31.990, lng: 115.760 },
-        { name: "Hills office", lat: -31.930, lng: 116.010 },
-        { name: "City office",  lat: -31.950, lng: 115.870 }
-      ];
-      // Use the site's default marker, shown at markerSize.
-      const { markerIcon, markerSize } = ctx.options;
-      const icon = markerIcon && markerSize
-        ? { url: markerIcon, scaledSize: new google.maps.Size(markerSize.w, markerSize.h) }
-        : markerIcon || undefined;
-      const info = new google.maps.InfoWindow();
-      const bounds = new google.maps.LatLngBounds();
-      locations.forEach((l) => {
-        const marker = new google.maps.Marker({ map, position: l, title: l.name, icon });
-        marker.addListener("click", () => { info.setContent(l.name); info.open({ map, anchor: marker }); });
-        bounds.extend(l);
-      });
-      map.fitBounds(bounds);
-    }
+    <!-- Init functions are defined in the page (or a script loaded before the page finishes parsing). -->
+    <script>
+        // Init function: receives the map lazy-gmaps.js built and this map's options.
+        function addLocations(map, ctx) {
+            const locations = [
+                { name: "Coast office", lat: -31.990, lng: 115.760 },
+                { name: "Hills office", lat: -31.930, lng: 116.010 },
+                { name: "City office",  lat: -31.950, lng: 115.870 }
+            ];
+            // Use the site's default marker, shown at markerSize.
+            const { markerIcon, markerSize } = ctx.options;
+            const icon = markerIcon && markerSize
+                ? { url: markerIcon, scaledSize: new google.maps.Size(markerSize.w, markerSize.h) }
+                : markerIcon || undefined;
+            const info = new google.maps.InfoWindow();
+            const bounds = new google.maps.LatLngBounds();
+            locations.forEach((l) => {
+                const marker = new google.maps.Marker({ map, position: l, title: l.name, icon });
+                marker.addListener("click", () => { info.setContent(l.name); info.open({ map, anchor: marker }); });
+                bounds.extend(l);
+            });
+            map.fitBounds(bounds);
+        }
 
-    // Modal: create a map on open, destroy it on close.
-    function openMap(lat, lng, title) {
-      const host = document.getElementById("dialog-map-host");
-      host.innerHTML = "";
-      const el = document.createElement("div");
-      el.className = "map";
-      el.setAttribute("data-gmap", "");
-      el.setAttribute("data-gmap-mode", "dynamic");
-      el.setAttribute("data-gmap-lat", lat);
-      el.setAttribute("data-gmap-lng", lng);
-      el.setAttribute("data-gmap-title", title);
-      host.appendChild(el);
-      document.getElementById("map-dialog").showModal();
-      LazyGMaps.load(el);
-    }
-    function closeMap() {
-      const el = document.querySelector("#dialog-map-host [data-gmap]");
-      if (el) LazyGMaps.destroy(el);
-    }
+        // Modal: create a map on open, destroy it on close.
+        function openMap(lat, lng, title) {
+            const host = document.getElementById("dialog-map-host");
+            host.innerHTML = "";
+            const el = document.createElement("div");
+            el.className = "map";
+            el.setAttribute("data-gmap", "");
+            el.setAttribute("data-gmap-mode", "dynamic");
+            el.setAttribute("data-gmap-lat", lat);
+            el.setAttribute("data-gmap-lng", lng);
+            el.setAttribute("data-gmap-title", title);
+            host.appendChild(el);
+            document.getElementById("map-dialog").showModal();
+            LazyGMaps.load(el);
+        }
+        function closeMap() {
+            const el = document.querySelector("#dialog-map-host [data-gmap]");
+            if (el) LazyGMaps.destroy(el);
+        }
 
-    // Events bubble, so one listener covers every map on the page.
-    document.addEventListener("gmap:ready", (e) => console.log("map ready", e.target));
-    document.addEventListener("gmap:error", (e) => console.warn("map failed", e.target, e.detail));
-  </script>
+        // Events bubble, so one listener covers every map on the page.
+        document.addEventListener("gmap:ready", (e) => console.log("map ready", e.target));
+        document.addEventListener("gmap:error", (e) => console.warn("map failed", e.target, e.detail));
+    </script>
 </body>
 </html>
