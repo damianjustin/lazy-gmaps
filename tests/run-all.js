@@ -5,11 +5,8 @@ const root = path.join(__dirname, "..");
 const lib = path.join(root, "lazy-gmaps.js");
 const runs = [
     ["suite.js", lib],
-    ["new.js", lib],
-    ["probe.js", lib],
     ["botcheck.js", lib],
-    ["examples_v3.js", lib, path.join(root, "examples.html")],
-    ["ex_modal.js", lib, path.join(root, "examples.html")],
+    ["examples.js", lib, path.join(root, "examples.html")],
 ];
 let failed = 0;
 for (const [file, ...args] of runs) {

@@ -1,7 +1,7 @@
 {
   "name": "lazy-gmaps",
   "version": "0.1.0",
-  "description": "Lazy-loaded Google Maps: free embeds, dynamic maps, click-to-load previews and bot filtering. No dependencies.",
+  "description": "Lazy-loaded Google Maps: maps load as they scroll into view, never for bots. No dependencies.",
   "license": "MIT",
   "author": "Damian Justin",
   "repository": {
@@ -10,7 +10,7 @@
   },
   "homepage": "https://github.com/damianjustin/lazy-gmaps#readme",
   "bugs": "https://github.com/damianjustin/lazy-gmaps/issues",
-  "keywords": ["google-maps", "google-maps-api", "lazy-load", "maps", "embed"],
+  "keywords": ["google-maps", "google-maps-api", "lazy-load", "maps", "bots"],
   "main": "lazy-gmaps.js",
   "jsdelivr": "lazy-gmaps.min.js",
   "unpkg": "lazy-gmaps.min.js",
